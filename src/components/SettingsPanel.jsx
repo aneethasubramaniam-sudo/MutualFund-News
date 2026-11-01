@@ -1,9 +1,7 @@
-import { useState } from 'react';
-import { connect } from '../auth.js';
+import { useRef, useState } from 'react';
+import { connect, callbackUrl } from '../auth.js';
 
-const CALLBACK = 'http://127.0.0.1:8787/api/auth/callback';
-
-function Connection({ name, id, secret, onId, onSecret, secretOptional, token, account, expiresAt, busy, error, onConnect, onDisconnect }) {
+function Connection({ name, id, secret, onId, onSecret, secretOptional, token, account, expiresAt, busy, error, onConnect, onDisconnect, onCancel }) {
   const days = expiresAt ? Math.round((expiresAt - Date.now()) / 86_400_000) : null;
   return (
     <div className="conn">
@@ -19,7 +17,8 @@ function Connection({ name, id, secret, onId, onSecret, secretOptional, token, a
       </label>
       <div className="row">
         <button onClick={onConnect} disabled={busy}>{busy ? 'Waiting for sign-in...' : token ? `Reconnect ${name}` : `Sign in with ${name}`}</button>
-        {token && <button className="ghost" onClick={onDisconnect}>Disconnect</button>}
+        {busy && <button className="ghost" onClick={onCancel}>Cancel</button>}
+        {token && !busy && <button className="ghost" onClick={onDisconnect}>Disconnect</button>}
       </div>
       {error && <p className="error">{error}</p>}
     </div>
@@ -31,12 +30,14 @@ export default function SettingsPanel({ s, set, open, setOpen }) {
   const missing = !s.openaiKey.trim() || !s.serpKey.trim();
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState({});
+  const abortRef = useRef(null);
 
   async function signIn(provider) {
     setBusy(provider);
+    abortRef.current = new AbortController();
     setErr((e) => ({ ...e, [provider]: '' }));
     try {
-      const t = await connect(provider, s);
+      const t = await connect(provider, s, abortRef.current.signal);
       set((cur) => provider === 'x'
         ? { ...cur, xToken: t.accessToken, xRefresh: t.refreshToken, xExpiresAt: t.expiresAt, xAccount: t.account }
         : { ...cur, linkedinToken: t.accessToken, linkedinExpiresAt: t.expiresAt, linkedinAccount: t.account });
@@ -66,16 +67,16 @@ export default function SettingsPanel({ s, set, open, setOpen }) {
           </label>
 
           <h3>Publishing accounts (optional)</h3>
-          <p className="hint">Register this exact callback URL in both developer apps: <code>{CALLBACK}</code></p>
+          <p className="hint">Register this exact callback URL in both developer apps: <code>{callbackUrl()}</code> (this is the address you opened the app at, so it differs between local and deployed)</p>
           <Connection name="X" id={s.xClientId} secret={s.xClientSecret} secretOptional
             onId={update('xClientId')} onSecret={update('xClientSecret')}
             token={s.xToken} account={s.xAccount} expiresAt={0} busy={busy === 'x'} error={err.x}
-            onConnect={() => signIn('x')}
+            onConnect={() => signIn('x')} onCancel={() => abortRef.current?.abort()}
             onDisconnect={() => set({ ...s, xToken: '', xRefresh: '', xExpiresAt: 0, xAccount: '' })} />
           <Connection name="LinkedIn" id={s.liClientId} secret={s.liClientSecret}
             onId={update('liClientId')} onSecret={update('liClientSecret')}
             token={s.linkedinToken} account={s.linkedinAccount} expiresAt={s.linkedinExpiresAt} busy={busy === 'linkedin'} error={err.linkedin}
-            onConnect={() => signIn('linkedin')}
+            onConnect={() => signIn('linkedin')} onCancel={() => abortRef.current?.abort()}
             onDisconnect={() => set({ ...s, linkedinToken: '', linkedinExpiresAt: 0, linkedinAccount: '' })} />
 
           <label className="check">

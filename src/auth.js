@@ -2,31 +2,52 @@ import { callAgent } from './api.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Opens the provider's sign-in popup and waits for the server to finish the token exchange. */
-export async function connect(provider, s) {
+export const callbackUrl = () => `${window.location.origin}/api/auth/callback`;
+
+/**
+ * Opens the provider's sign-in popup. The popup reports back over a BroadcastChannel
+ * (window.opener and popup.closed are unreliable after X or LinkedIn load).
+ * Pass an AbortSignal so the user can cancel.
+ */
+export function connect(provider, s, signal) {
   // Open the popup synchronously inside the click, or browsers block it.
   const win = window.open('', 'mfn-oauth', 'width=520,height=720');
-  if (!win) throw new Error('Popup was blocked. Allow popups for this page and try again.');
-  try {
-    const clientId = provider === 'x' ? s.xClientId : s.liClientId;
-    const clientSecret = provider === 'x' ? s.xClientSecret : s.liClientSecret;
-    const { state, authUrl } = await callAgent('auth/start', { provider, clientId, clientSecret }, s);
-    win.location = authUrl;
+  if (!win) return Promise.reject(new Error('Popup was blocked. Allow popups for this page and try again.'));
 
-    const deadline = Date.now() + 5 * 60_000;
-    while (Date.now() < deadline) {
-      await sleep(1500);
-      const r = await fetch(`/api/auth/result/${state}`).then((x) => x.json());
-      if (r.status === 'done') return r.tokens;
-      if (r.status === 'error') throw new Error(r.error);
-      if (r.status === 'unknown') throw new Error('Sign-in expired. Try again.');
-      if (win.closed) throw new Error('Sign-in window was closed before finishing.');
-    }
-    throw new Error('Sign-in timed out.');
-  } catch (e) {
-    if (!win.closed) win.close();
-    throw e;
-  }
+  const clientId = provider === 'x' ? s.xClientId : s.liClientId;
+  const clientSecret = provider === 'x' ? s.xClientSecret : s.liClientSecret;
+  const redirectUri = callbackUrl();
+  const channel = new BroadcastChannel('mfn-oauth');
+
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => finish(new Error('Sign-in timed out. Try again.')), 5 * 60_000);
+    const finish = (err, tokens) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      channel.close();
+      try { win.close(); } catch { /* may be blocked */ }
+      err ? reject(err) : resolve(tokens);
+    };
+    signal?.addEventListener('abort', () => finish(new Error('Sign-in cancelled.')));
+
+    (async () => {
+      const { state, verifier, authUrl } = await callAgent('auth/start', { provider, clientId, clientSecret, redirectUri }, s);
+      channel.onmessage = async (ev) => {
+        const m = ev.data;
+        if (m?.type !== 'mfn-oauth' || m.state !== state) return;
+        if (m.error || !m.code) return finish(new Error(`Sign-in was denied or failed: ${m.error || 'no code returned'}`));
+        try {
+          const tokens = await callAgent('auth/exchange', { provider, clientId, clientSecret, code: m.code, verifier, redirectUri }, s);
+          finish(null, tokens);
+        } catch (e) {
+          finish(e);
+        }
+      };
+      win.location = authUrl;
+    })().catch((e) => finish(e));
+  });
 }
 
 /** Returns a usable X token, refreshing it first if it is about to expire. */

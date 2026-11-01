@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { callAgent } from './api.js';
 import { useSettings } from './useSettings.js';
+import { freshXSettings } from './auth.js';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ResearchStep from './components/ResearchStep.jsx';
 import OptionsStep from './components/OptionsStep.jsx';
@@ -65,7 +66,8 @@ export default function App() {
       return ids;
     };
     try {
-      const data = await callAgent(`publish/${kind}`, payload, s);
+      const cfg = kind === 'twitter' ? await freshXSettings(s, set) : s;
+      const data = await callAgent(`publish/${kind}`, payload, cfg);
       const ids = finish(data.ids, 'done');
       const url = kind === 'twitter' ? `https://x.com/i/status/${ids[0]}` : data.url;
       setPubs((p) => ({ ...p, [key]: { ...p[key], url } }));

@@ -6,6 +6,7 @@ import { runResearch } from './agents/research.js';
 import { runLinkedIn } from './agents/linkedin.js';
 import { runTwitter } from './agents/twitter.js';
 import { publishLinkedIn, publishThread } from './publish.js';
+import { startAuth, handleCallback, getResult, refreshX } from './oauth.js';
 import { httpError } from './errors.js';
 
 const app = express();
@@ -47,6 +48,18 @@ app.post('/api/publish/linkedin', route((req) =>
 
 app.post('/api/publish/twitter', route((req) =>
   publishThread({ token: creds(req).xToken, tweets: req.body.tweets, replyTo: req.body.replyTo })));
+
+// Sign in with X / LinkedIn. The popup lands on /callback, the UI polls /result.
+app.post('/api/auth/start', route((req) => startAuth(req.body || {})));
+app.post('/api/auth/x/refresh', route((req) => refreshX(req.body || {})));
+app.get('/api/auth/result/:state', (req, res) => res.json(getResult(req.params.state)));
+app.get('/api/auth/callback', async (req, res) => {
+  const { ok } = await handleCallback(req.query);
+  res.type('html').send(`<!doctype html><meta charset="utf-8"><title>Sign in</title>
+<body style="font-family:system-ui;padding:32px"><h2>${ok ? 'Connected' : 'Sign-in failed'}</h2>
+<p>${ok ? 'You can close this window and go back to the app.' : 'Go back to the app to see the reason.'}</p>
+<script>${ok ? 'setTimeout(()=>window.close(),800)' : ''}</script></body>`);
+});
 
 // Serve the built UI when present (npm run build && npm start).
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');

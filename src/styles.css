@@ -32,3 +32,5 @@ button.small { padding: 3px 8px; font-size: 12px; }
 .post { font-size: 14px; line-height: 1.45; resize: vertical; }
 .tweet { border: 1px solid #eceef1; border-radius: 6px; padding: 8px; font-size: 14px; white-space: pre-wrap; }
 .ok { color: #067647; font-size: 14px; margin: 0; }
+.conn { border: 1px solid #e1e4e8; border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+code { background: #f0f2f4; padding: 1px 5px; border-radius: 4px; font-size: 12px; }

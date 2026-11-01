@@ -29,8 +29,24 @@ http.createServer((req, res) => {
       }
       return send({ choices: [{ message: { content: JSON.stringify(out) } }] });
     }
+    const u = new URL(req.url, 'http://x');
+    if (u.pathname === '/x/authorize' || u.pathname === '/oauth/v2/authorization') {
+      if (u.pathname === '/x/authorize' && !u.searchParams.get('code_challenge')) return send({ error: 'no PKCE' }, 400);
+      const back = new URL(u.searchParams.get('redirect_uri'));
+      back.searchParams.set('code', 'authcode'); back.searchParams.set('state', u.searchParams.get('state'));
+      res.writeHead(302, { location: back.toString() }); return res.end();
+    }
+    if (u.pathname === '/2/oauth2/token' || u.pathname === '/oauth/v2/accessToken') {
+      const f = new URLSearchParams(body);
+      const isX = u.pathname.startsWith('/2/');
+      if (f.get('grant_type') === 'refresh_token') return send({ access_token: 'tok-x-refreshed', refresh_token: 'rt2', expires_in: 7200 });
+      if (isX && !f.get('code_verifier')) return send({ error: 'missing verifier' }, 400);
+      if (!isX && !f.get('client_secret')) return send({ error: 'missing secret' }, 400);
+      return send(isX ? { access_token: 'tok-x-new', refresh_token: 'rt1', expires_in: 7200 } : { access_token: 'tok-li-new', expires_in: 5184000 });
+    }
+    if (u.pathname === '/2/users/me') return send({ data: { username: 'tester' } });
     const authed = /^Bearer tok/.test(req.headers.authorization || '');
-    if (req.url === '/v2/userinfo') return authed ? send({ sub: 'abc123' }) : send({}, 401);
+    if (req.url === '/v2/userinfo') return authed ? send({ sub: 'abc123', name: 'Test Person' }) : send({}, 401);
     if (req.url === '/v2/ugcPosts') { res.setHeader('x-restli-id', 'urn:li:share:999'); return send({ id: 'urn:li:share:999' }, 201); }
     if (req.url === '/2/tweets') {
       if (!authed) return send({ title: 'Unauthorized' }, 401);

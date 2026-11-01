@@ -29,6 +29,16 @@ http.createServer((req, res) => {
       }
       return send({ choices: [{ message: { content: JSON.stringify(out) } }] });
     }
+    const authed = /^Bearer tok/.test(req.headers.authorization || '');
+    if (req.url === '/v2/userinfo') return authed ? send({ sub: 'abc123' }) : send({}, 401);
+    if (req.url === '/v2/ugcPosts') { res.setHeader('x-restli-id', 'urn:li:share:999'); return send({ id: 'urn:li:share:999' }, 201); }
+    if (req.url === '/2/tweets') {
+      if (!authed) return send({ title: 'Unauthorized' }, 401);
+      const t = JSON.parse(body);
+      if (t.text === 'Tweet 3 text' && !globalThis.failed) { globalThis.failed = true; return send({ detail: 'simulated failure' }, 429); }
+      globalThis.n = (globalThis.n || 100) + 1;
+      return send({ data: { id: String(globalThis.n), text: t.text } }, 201);
+    }
     send({ error: 'not found' }, 404);
   });
 }).listen(9999, '127.0.0.1', () => console.log('mock on 9999'));

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { runResearch } from './agents/research.js';
 import { runLinkedIn } from './agents/linkedin.js';
 import { runTwitter } from './agents/twitter.js';
+import { publishLinkedIn, publishThread } from './publish.js';
 import { httpError } from './errors.js';
 
 const app = express();
@@ -15,13 +16,15 @@ const creds = (req) => ({
   openaiKey: (req.get('x-openai-key') || '').trim(),
   serpKey: (req.get('x-serp-key') || '').trim(),
   model: (req.get('x-model') || '').trim(),
+  linkedinToken: (req.get('x-linkedin-token') || '').trim(),
+  xToken: (req.get('x-x-token') || '').trim(),
 });
 
 const route = (fn) => async (req, res) => {
   try {
     res.json(await fn(req));
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message || 'Server error' });
+    res.status(e.status || 500).json({ error: e.message || 'Server error', ...(e.extra || {}) });
   }
 };
 
@@ -38,6 +41,12 @@ app.post('/api/linkedin', route((req) =>
 
 app.post('/api/twitter', route((req) =>
   runTwitter({ ...creds(req), idea: requireIdea(req.body), tweetCount: req.body.tweetCount })));
+
+app.post('/api/publish/linkedin', route((req) =>
+  publishLinkedIn({ token: creds(req).linkedinToken, text: String(req.body.text || '') })));
+
+app.post('/api/publish/twitter', route((req) =>
+  publishThread({ token: creds(req).xToken, tweets: req.body.tweets, replyTo: req.body.replyTo })));
 
 // Serve the built UI when present (npm run build && npm start).
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');

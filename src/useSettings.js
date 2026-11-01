@@ -5,6 +5,8 @@ const KEY = 'mfn.settings.v1';
 export const DEFAULTS = {
   openaiKey: '',
   serpKey: '',
+  linkedinToken: '',
+  xToken: '',
   model: 'gpt-6.1-sol',
   remember: false,
   focus: 'India',

@@ -16,6 +16,12 @@ export default function SettingsPanel({ s, set, open, setOpen }) {
           <label>SerpAPI key
             <input type="password" autoComplete="off" value={s.serpKey} onChange={update('serpKey')} placeholder="SerpAPI private key" />
           </label>
+          <label>LinkedIn access token (for publishing, optional)
+            <input type="password" autoComplete="off" value={s.linkedinToken} onChange={update('linkedinToken')} placeholder="Scopes: openid profile w_member_social" />
+          </label>
+          <label>X access token (for publishing, optional)
+            <input type="password" autoComplete="off" value={s.xToken} onChange={update('xToken')} placeholder="OAuth 2.0 user token, scope tweet.write" />
+          </label>
           <label>Model
             <input value={s.model} onChange={update('model')} />
           </label>
@@ -24,7 +30,7 @@ export default function SettingsPanel({ s, set, open, setOpen }) {
             Remember keys on this device (browser storage, not encrypted)
           </label>
           <div>
-            <button className="ghost" onClick={() => set({ ...s, openaiKey: '', serpKey: '' })}>Clear keys</button>
+            <button className="ghost" onClick={() => set({ ...s, openaiKey: '', serpKey: '', linkedinToken: '', xToken: '' })}>Clear keys</button>
           </div>
           <p className="hint">Keys go to your local server on each request and are not stored there. Run this on your own machine only.</p>
         </div>

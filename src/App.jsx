@@ -14,6 +14,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [approved, setApproved] = useState([]);
+  const [pubs, setPubs] = useState({});
   const [results, setResults] = useState({ linkedin: {}, twitter: {} });
 
   const toggle = (id) =>
@@ -26,6 +27,7 @@ export default function App() {
     setSelected([]);
     setApproved([]);
     setResults({ linkedin: {}, twitter: {} });
+    setPubs({});
     try {
       const data = await callAgent('research', { focus: s.focus, aiAngle: s.aiAngle }, s);
       setIdeas(data.ideas);
@@ -52,10 +54,31 @@ export default function App() {
     }
   }
 
+  // Publishing is always a deliberate click plus a confirm dialog (see OutputStep).
+  async function publish(kind, idea, payload) {
+    const key = `${kind}:${idea.id}`;
+    const before = pubs[key]?.ids || [];
+    setPubs((p) => ({ ...p, [key]: { ...p[key], status: 'loading', error: '' } }));
+    const finish = (extra, status, error = '') => {
+      const ids = [...before, ...(extra || [])];
+      setPubs((p) => ({ ...p, [key]: { status, error, ids, url: p[key]?.url } }));
+      return ids;
+    };
+    try {
+      const data = await callAgent(`publish/${kind}`, payload, s);
+      const ids = finish(data.ids, 'done');
+      const url = kind === 'twitter' ? `https://x.com/i/status/${ids[0]}` : data.url;
+      setPubs((p) => ({ ...p, [key]: { ...p[key], url } }));
+    } catch (e) {
+      finish(e.data?.ids, 'error', e.message);
+    }
+  }
+
   // Human has approved the 3 ideas. LinkedIn and X agents run at the same time.
   function generate() {
     const chosen = ideas.filter((i) => selected.includes(i.id));
     setApproved(chosen);
+    setPubs({});
     setResults({ linkedin: {}, twitter: {} });
     chosen.forEach((idea) => {
       runOne('linkedin', idea);
@@ -72,7 +95,7 @@ export default function App() {
       <SettingsPanel s={s} set={set} open={settingsOpen} setOpen={setSettingsOpen} />
       <ResearchStep s={s} set={set} onRun={runResearch} loading={loading} error={error} ideas={ideas} selected={selected} toggle={toggle} />
       {ideas.length > 0 && <OptionsStep s={s} set={set} canGenerate={selected.length === 3} onGenerate={generate} busy={busy} />}
-      {approved.length > 0 && <OutputStep ideas={approved} results={results} retry={runOne} />}
+      {approved.length > 0 && <OutputStep ideas={approved} results={results} retry={runOne} pubs={pubs} publish={publish} />}
     </main>
   );
 }
